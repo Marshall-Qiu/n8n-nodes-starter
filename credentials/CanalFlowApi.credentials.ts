@@ -18,14 +18,19 @@ export class CanalFlowApi implements ICredentialType {
 			displayName: 'Password',
 			name: 'password',
 			type: 'string',
+			typeOptions: {
+				password: true,
+			},
 			default: '',
 		},
 	];
 	authenticate = {
 		type: 'generic',
 		properties: {
-			headers: {
-				Authorization: '={{"Basic " + $credentials.username}}',
+			auth: {
+				// basic auth ref: https://docs.n8n.io/integrations/creating-nodes/build/reference/credentials-files/#properties_1
+				username: '={{$credentials.username}}',
+				password: '={{$credentials.password}}',
 			},
 		},
 	} as IAuthenticateGeneric;
