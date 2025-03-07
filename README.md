@@ -12,42 +12,33 @@ npm install -g n8n
 n8n
 ```
 
-## Create Custom Folder Under n8n Folder (for install custom nodes)
+## Create Custom Folder Under n8n Directory (for installing custom nodes)
 
 ```
 cd ~/.n8n
-```
-
-```
 mkdir custom
-```
-
-```
 cd custom
-```
-
-```
-npm init // create package.json, use default
+npm init  # Create package.json with default settings
 ```
 
 ## Install Custom Node
 
-Build the custom node code at your Custom Node Repo Folder
+1. Build the custom node code in your Custom Node Repository:
 
 ```
 npm run build
 ```
 
-Go to custom folder in the folder we install n8n
+2. Navigate to the n8n custom folder:
 
 ```
 cd ~/.n8n/custom
 ```
 
+3. Link your custom node:
+
 ```
-npm link n8n-nodes-city-weather // the name in the package.json
+npm link n8n-nodes-city-weather  # Replace with the name from your Custom Node Repository's package.json
 ```
 
-Restart n8n to see the new node
-
-TODO: hard reload
+4. Restart n8n to load the new node
