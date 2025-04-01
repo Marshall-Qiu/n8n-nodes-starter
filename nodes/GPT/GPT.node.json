@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-base.GPT",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Miscellaneous"],
+	"alias": ["Chat GPT", "Outputs Artifacts"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": ""
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": ""
+			}
+		]
+	}
+}

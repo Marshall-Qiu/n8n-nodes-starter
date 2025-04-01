@@ -1,0 +1,22 @@
+{
+	"node": "n8n-nodes-base.TaskTemplate",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Core Nodes"],
+	"subcategories": {
+		"Core Nodes": ["Flow", "Data Transformation"]
+	},
+	"alias": ["Canal Flow", "Topic Creation"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": ""
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": ""
+			}
+		]
+	}
+}

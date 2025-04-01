@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-base.AcceptFileArtifact",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Miscellaneous"],
+	"alias": ["Canal Flow", "Input Artifact"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": ""
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": ""
+			}
+		]
+	}
+}

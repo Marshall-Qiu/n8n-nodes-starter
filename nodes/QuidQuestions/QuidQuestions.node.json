@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-base.QuidQuestions",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Miscellaneous"],
+	"alias": ["Ask Quid Questions", "Outputs Email"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": ""
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": ""
+			}
+		]
+	}
+}

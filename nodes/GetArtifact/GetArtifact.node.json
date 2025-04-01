@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-base.CityWeather",
+	"node": "n8n-nodes-base.GetArtifact",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Miscellaneous"],
