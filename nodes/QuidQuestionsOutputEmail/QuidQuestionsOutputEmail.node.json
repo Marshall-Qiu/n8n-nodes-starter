@@ -1,9 +1,9 @@
 {
-	"node": "n8n-nodes-base.GPT",
+	"node": "n8n-nodes-base.QuidQuestionsOutputEmail",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Miscellaneous"],
-	"alias": ["Chat GPT", "Outputs Artifacts"],
+	"alias": ["Quid Questions Output Email"],
 	"resources": {
 		"credentialDocumentation": [
 			{

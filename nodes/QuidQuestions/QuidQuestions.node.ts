@@ -1,8 +1,13 @@
 // @ts-nocheck
 import { IExecuteFunctions } from 'n8n-core';
-import * as tar from 'tar';
 
-import { IDataObject, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
+import {
+	IDataObject,
+	INodeExecutionData,
+	INodeType,
+	INodeTypeDescription,
+	NodeOperationError,
+} from 'n8n-workflow';
 import * as k8s from '@kubernetes/client-node';
 import { Storage } from '@google-cloud/storage';
 import {
@@ -12,10 +17,70 @@ import {
 	PutObjectCommand,
 	GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import zlib from 'zlib';
+import * as tar from 'tar';
+import { Readable } from 'stream';
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 const watch = new k8s.Watch(kc);
+
+async function extractTgzBuffer(buffer) {
+	return new Promise((resolve, reject) => {
+		// Create readable stream from buffer
+		const bufferStream = Readable.from(buffer);
+		let fileContent = '';
+
+		// Create extraction pipeline
+		bufferStream
+			.pipe(zlib.createGunzip())
+			.pipe(
+				tar.x({
+					onentry: (entry) => {
+						entry.on('data', (chunk) => {
+							fileContent += chunk.toString();
+						});
+					},
+				}),
+			)
+			.on('error', reject)
+			.on('finish', () => {
+				resolve(fileContent);
+			});
+	});
+}
+
+async function uploadOssObjects({ buffer, destFileName, credentials }) {
+	const s3Client = new S3Client({
+		endpoint: 'https://oss-us-east-1.aliyuncs.com',
+		region: 'us-east-1',
+		credentials: {
+			accessKeyId: credentials.accessKeyId,
+			secretAccessKey: credentials.accessKeySecret,
+		},
+	});
+
+	const uploadCommand = new PutObjectCommand({
+		Bucket: 'workbench-artifacts',
+		Key: destFileName,
+		Body: buffer,
+	});
+	const uploadResponse = await s3Client.send(uploadCommand);
+	console.log('Oss uploaded', uploadResponse);
+
+	const getCommand = new GetObjectCommand({
+		Bucket: 'workbench-artifacts',
+		Key: destFileName,
+	});
+
+	const response = await s3Client.send(getCommand);
+	const chunks = [];
+	for await (const chunk of response.Body) {
+		chunks.push(chunk);
+	}
+	const downloadedBuffer = Buffer.concat(chunks);
+	console.log('Oss get content', downloadedBuffer);
+}
 
 // a script to parse task's input schema converted to arguments format
 const transformOutputParameters = (parameters) => {
@@ -35,14 +100,14 @@ const transformOutputParameters = (parameters) => {
 
 export class QuidQuestions implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Ask Quid Questions',
-		name: 'quidQuestions',
-		icon: 'file:search.svg',
+		displayName: 'Quid Questions',
+		name: 'quid-questions',
+		icon: 'file:ask-quid-logo.svg',
 		group: ['transform'],
 		version: 1,
-		description: 'Ask Quid Questions',
+		description: 'Quid Questions',
 		defaults: {
-			name: 'Ask Quid Questions',
+			name: 'Quid Questions',
 		},
 		inputs: ['main'],
 		outputs: ['main'],
@@ -55,105 +120,35 @@ export class QuidQuestions implements INodeType {
 		],
 		properties: [
 			{
-				displayName: 'Email Settings',
-				name: 'emailSettings',
-				type: 'fixedCollection',
-				placeholder: 'Add Email Setting',
-				default: {},
-				options: [
-					{
-						name: 'value',
-						displayName: 'Value',
-						values: [
-							{
-								displayName: 'Recipients',
-								name: 'recipients',
-								type: 'string',
-								typeOptions: {
-									multipleValues: true,
-								},
-								default: [],
-								required: true,
-								description: 'List of email recipients',
-							},
-							{
-								displayName: 'Subject',
-								name: 'subject',
-								type: 'string',
-								default: '',
-								required: true,
-								description: 'Email subject',
-							},
-						],
-					},
-				],
+				displayName: 'Prompt',
+				name: 'prompt',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				default: '',
+				required: true,
+				description: 'The prompt text for the question',
 			},
 			{
-				displayName: 'Questions',
-				name: 'questions',
-				type: 'fixedCollection',
-				placeholder: 'Add Question',
-				default: {},
-				typeOptions: {
-					multipleValues: true,
-				},
+				displayName: 'Assistant Type',
+				name: 'assistantType',
+				type: 'options',
 				options: [
 					{
-						name: 'value',
-						displayName: 'Value',
-						values: [
-							{
-								displayName: 'Title',
-								name: 'title',
-								type: 'string',
-								default: '',
-								required: true,
-								description: 'Title of the question',
-							},
-							{
-								displayName: 'Prompt',
-								name: 'prompt',
-								type: 'string',
-								typeOptions: {
-									rows: 4,
-								},
-								default: '',
-								required: true,
-								description: 'The prompt text for the question',
-							},
-							{
-								displayName: 'Assistant Settings',
-								name: 'assistant-settings',
-								type: 'collection',
-								default: {},
-								required: true,
-								description: 'Assistant settings configuration',
-								placeholder: 'Choose your assistant', // will display add button to add key
-								options: [
-									{
-										displayName: 'Key',
-										name: 'key',
-										type: 'options',
-										options: [
-											{
-												name: 'Topic Datasets Assistant',
-												value: 'topic-datasets-assistant',
-												description: 'For asking topic related questions',
-											},
-											{
-												name: 'Broad Social Datasets Assistant',
-												value: 'broad-social-datasets-assistant',
-												description: 'For asking real-time news and social related questions',
-											},
-										],
-										default: 'topic-datasets-assistant',
-										description: 'Choose the assistant to use',
-									},
-								],
-							},
-						],
+						name: 'Topic Datasets Assistant',
+						value: 'topic-datasets-assistant',
+						description: 'For asking topic related questions',
+					},
+					{
+						name: 'Broad Social Datasets Assistant',
+						value: 'broad-social-datasets-assistant',
+						description: 'For asking real-time news and social related questions',
 					},
 				],
+				default: 'topic-datasets-assistant',
+				required: true,
+				description: 'Choose the assistant to use',
 			},
 		],
 	};
@@ -162,19 +157,18 @@ export class QuidQuestions implements INodeType {
 		const items = this.getInputData();
 		const returnData = [];
 
+		// When starting workflow
+
 		for (let i = 0; i < items.length; i++) {
-			let responseData;
-			const emailSettings = this.getNodeParameter('emailSettings', i) as IDataObject;
-			const questions = this.getNodeParameter('questions', i) as IDataObject;
-			console.log('emailSettings', emailSettings.value);
-			console.log('questions', JSON.stringify(questions.value, null, 2));
+			const prompt = this.getNodeParameter('prompt', i) as string;
+			const assistantType = this.getNodeParameter('assistantType', i) as string;
 
 			const monitorAccountCredentials = await this.getCredentials('QuidMonitorAccount');
-			console.log('monitorAccountCredentials', monitorAccountCredentials);
+
 			// Create Execution
 			const anonymousExecutionRequestBody = {
 				workspace: 'marshall',
-				name: 'ask-quid-questions',
+				name: 'gpt-chat',
 				description: '',
 				gitRepo: '',
 				retryConfig: 'DEFAULT',
@@ -183,14 +177,26 @@ export class QuidQuestions implements INodeType {
 					artifacts: [],
 				},
 				outputs: {
-					parameters: [],
-					artifacts: [],
+					artifacts: [
+						{
+							name: 'raw-result',
+							from: '{{ steps.gpt-chat.outputs.artifacts.raw-result }}',
+						},
+						{
+							name: 'answer-markdown',
+							from: '{{ steps.gpt-chat.outputs.artifacts.answer-markdown }}',
+						},
+						{
+							name: 'answer-html',
+							from: '{{ steps.gpt-chat.outputs.artifacts.answer-html }}',
+						},
+					],
 				},
 				steps: [
 					[
 						{
-							name: 'ask-quid-questions',
-							task: 'CANAL_TASK.quid-questions.main',
+							name: 'gpt-chat',
+							task: 'WORKFLOW_TEMPLATE.quid-questions.main-askquid[ask]',
 							arguments: {
 								parameters: [
 									{
@@ -202,12 +208,14 @@ export class QuidQuestions implements INodeType {
 										},
 									},
 									{
-										name: 'email-settings',
-										value: emailSettings.value,
+										name: 'prompt',
+										value: prompt,
 									},
 									{
-										name: 'questions',
-										value: questions.value,
+										name: 'assistant-settings',
+										value: {
+											key: assistantType,
+										},
 									},
 								],
 							},
@@ -216,12 +224,13 @@ export class QuidQuestions implements INodeType {
 				],
 			};
 
+			const credentials = await this.getCredentials('QuidMonitorAccount');
 			const options = {
 				headers: {
 					Accept: 'application/json',
 					'Content-Type': 'application/json',
 					Authorization: `Basic ${Buffer.from(
-						`${monitorAccountCredentials.email}:${monitorAccountCredentials.password}`,
+						`${credentials.email}:${credentials.password}`,
 					).toString('base64')}`,
 				},
 				method: 'POST',
@@ -248,6 +257,8 @@ export class QuidQuestions implements INodeType {
 					- add timeout setting for waiting
 			*/
 			let isCompleted = false;
+			let outputArtifacts;
+			let workflowId;
 			const req = await watch.watch(
 				'/apis/argoproj.io/v1alpha1/namespaces/canal-flow/workflows',
 				// optional query parameters can go here.
@@ -255,8 +266,7 @@ export class QuidQuestions implements INodeType {
 					fieldSelector: `metadata.name=${workflowName}`,
 				},
 				// callback is called for each received object.
-				(type, apiObj, watchObj) => {
-					console.log('watchObj', watchObj);
+				async (type, apiObj, watchObj) => {
 					const objectCondition = watchObj?.object?.status?.phase;
 
 					isCompleted =
@@ -266,24 +276,21 @@ export class QuidQuestions implements INodeType {
 
 					// output parameters and artifacts
 					if (isCompleted) {
-						console.log(
-							'workflow completed',
-							workflowName,
-							watchObj?.object?.status?.nodes,
-							watchObj?.object?.status?.nodes?.[`${workflowName}`]?.outputs?.parameters,
-						);
-						returnData.push(
-							transformOutputParameters(
-								watchObj?.object?.status?.nodes?.[`${workflowName}`]?.outputs?.parameters,
-							),
-						);
+						workflowId = watchObj?.object?.metadata?.uid;
+						const workflowName = watchObj?.object?.metadata?.name;
+						const nodeOutputs = watchObj?.object?.status?.nodes?.[`${workflowName}`]?.outputs;
+
+						// Handle both parameters and artifacts
+						const outputParameters = nodeOutputs?.parameters || [];
+						outputArtifacts = nodeOutputs?.artifacts || [];
+
 						req.abort();
+						console.log('Workflow Completed In Callback');
 					}
 				},
 				// done callback is called if the watch terminates normally
 				(err) => {
-					console.log(err);
-					req.abort();
+					console.error('Execute function error:', err);
 				},
 			);
 
@@ -291,8 +298,73 @@ export class QuidQuestions implements INodeType {
 			while (!isCompleted) {
 				await new Promise((resolve) => setTimeout(resolve, 2000));
 			}
-		}
 
-		return [this.helpers.returnJsonArray(returnData)];
+			const binaryData: IDataObject = {};
+			const jsonData: IDataObject = {};
+
+			// Get credentials for API request
+			const authHeader = `Basic ${Buffer.from(
+				`${credentials.email}:${credentials.password}`,
+			).toString('base64')}`;
+
+			for (const artifact of outputArtifacts) {
+				const artifactUrl = `https://canal-flow-argo-api.dev-spark.ali-netbase.com/artifacts-by-uid/${workflowId}/${workflowName}/${artifact.name}`;
+
+				console.log('requesting artifact', artifactUrl);
+
+				// Make request to get artifact, return binary data
+				const response = await this.helpers.request({
+					method: 'GET',
+					uri: artifactUrl,
+					headers: {
+						Authorization: authHeader,
+					},
+					resolveWithFullResponse: true,
+					encoding: null,
+				});
+
+				// Get proper mimeType based on the artifact name
+				let mimeType = response.headers['content-type'] || 'application/octet-stream';
+				if (artifact.name.includes('markdown')) {
+					mimeType = 'text/markdown';
+				} else if (artifact.name.includes('html')) {
+					mimeType = 'text/html';
+				} else if (artifact.name.includes('raw-result')) {
+					mimeType = 'application/json';
+				}
+
+				const contentDisposition = response.headers['content-disposition'];
+				const fileNameMatch = contentDisposition?.match(/filename="(.+)"/);
+				const extension = fileNameMatch?.[1]?.split('.').pop();
+				const fileName = fileNameMatch?.[1] || `${artifact.name}${extension}`;
+
+				// TODO try to decompress the response.body
+				if (extension === 'tgz') {
+					const decompressedData = await extractTgzBuffer(response.body);
+					jsonData[artifact.name] = decompressedData.toString();
+				} else {
+					jsonData[artifact.name] = response.body.toString();
+				}
+
+				// Correct order: data, fileName, mimeType
+				binaryData[artifact.name] = await this.helpers.prepareBinaryData(
+					response.body,
+					fileName,
+					mimeType,
+				);
+			}
+
+			console.log('binaryData', binaryData);
+
+			returnData.push({
+				json: Object.keys(jsonData).length ? jsonData : undefined,
+				binary: Object.keys(binaryData).length ? binaryData : undefined,
+			});
+
+			console.log('Workflow Completed');
+		}
+		console.log('final returnData', returnData);
+
+		return [returnData];
 	}
 }

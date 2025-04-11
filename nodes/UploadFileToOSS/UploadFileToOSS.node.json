@@ -1,9 +1,9 @@
 {
-	"node": "n8n-nodes-base.QuidQuestions",
+	"node": "n8n-nodes-base.UploadFileToOSS",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Miscellaneous"],
-	"alias": ["Quid Questions", "Outputs Artifacts"],
+	"alias": ["Upload File To OSS"],
 	"resources": {
 		"credentialDocumentation": [
 			{

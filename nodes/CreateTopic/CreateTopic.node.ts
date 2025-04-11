@@ -81,7 +81,7 @@ export class CreateTopic implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Create Topic',
 		name: 'createTopic',
-		icon: 'file:search.svg',
+		icon: 'file:monitor-icon.svg',
 		group: ['transform'],
 		version: 1,
 		description: 'Create a new Monitor Topic with boolean query',
@@ -119,7 +119,7 @@ export class CreateTopic implements INodeType {
 				description: 'Whether to use the file as input for the execution',
 			},
 			{
-				displayName: 'File Name',
+				displayName: 'Boolean Query File Name',
 				name: 'fileName',
 				type: 'string',
 				default: 'test-artifact',
@@ -164,9 +164,10 @@ export class CreateTopic implements INodeType {
 				: (this.getNodeParameter('booleanQuery', i) as string);
 
 			// Handle binary data if useFileAsInput enabled
-			if (useFileAsInput && items[i].binary) {
+			if (useFileAsInput && items[i].binary && Object.keys(items[i].binary).length > 0) {
 				// Convert each binary property to an artifact with raw content
 				// items[i].binary is an object, when there are multiple files we need to specify which file to use
+
 				for (const [_, binaryData] of Object.entries(items[i].binary)) {
 					const buffer = Buffer.from(binaryData.data, 'base64');
 
